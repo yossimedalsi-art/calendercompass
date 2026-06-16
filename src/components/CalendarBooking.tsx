@@ -69,10 +69,10 @@ export default function CalendarBooking() {
     setSubmitting(true);
     try {
       const appointment: Appointment = {
+        ...formData,
         date: selectedDate.toISOString().split('T')[0],
         time: selectedTime,
-        topic: `${selectedService.name} | ${formData.topic}`,
-        ...formData
+        topic: `${selectedService.name} | ${formData.topic}`
       };
       const appointmentId = await bookAppointment(appointment);
       
