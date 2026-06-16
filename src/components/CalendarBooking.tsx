@@ -5,8 +5,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterv
 import { he } from "date-fns/locale";
 import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, Clock, Loader2, CalendarPlus, CheckCircle2 } from "lucide-react";
 import { isShabbatOrHoliday } from "@/lib/hebcal";
-import { getAvailableSlots, bookAppointment, Appointment } from "@/lib/appointments";
-import { getSettings, SystemSettings, Service } from "@/lib/settings";
+import type { SystemSettings, Service } from "@/lib/settings";
 import { getGoogleCalendarLink } from "@/lib/calendarLink";
 
 type Step = "services" | "calendar" | "details" | "success";
@@ -31,31 +30,43 @@ export default function CalendarBooking() {
   // Form state
   const [formData, setFormData] = useState({ name: "", phone: "", email: "", topic: "" });
 
+  // Local (Asia/Jerusalem) date string — avoids the toISOString() UTC day-shift bug.
+  const toDateStr = (d: Date) => format(d, "yyyy-MM-dd");
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const startDay = getDay(monthStart);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   useEffect(() => {
-    getSettings().then(data => {
-      setSettings(data);
-      setLoadingSettings(false);
-      // If only one service exists, auto-select it and skip to calendar
-      if (data.services && data.services.length === 1) {
-        setSelectedService(data.services[0]);
-        setStep("calendar");
-      }
-    });
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data: SystemSettings) => {
+        setSettings(data);
+        setLoadingSettings(false);
+        // If only one service exists, auto-select it and skip to calendar
+        if (data.services && data.services.length === 1) {
+          setSelectedService(data.services[0]);
+          setStep("calendar");
+        }
+      })
+      .catch(() => setLoadingSettings(false));
   }, []);
 
   useEffect(() => {
     if (selectedDate && selectedService) {
       setLoadingSlots(true);
       setSelectedTime(null);
-      getAvailableSlots(selectedDate, selectedService.durationMinutes).then(slots => {
-        setAvailableTimes(slots);
-        setLoadingSlots(false);
-      });
+      fetch(`/api/availability?date=${toDateStr(selectedDate)}&duration=${selectedService.durationMinutes}`)
+        .then((r) => r.json())
+        .then((d) => {
+          setAvailableTimes(Array.isArray(d.slots) ? d.slots : []);
+          setLoadingSlots(false);
+        })
+        .catch(() => {
+          setAvailableTimes([]);
+          setLoadingSlots(false);
+        });
     }
   }, [selectedDate, selectedService]);
 
@@ -68,17 +79,43 @@ export default function CalendarBooking() {
     
     setSubmitting(true);
     try {
-      const appointment: Appointment = {
-        ...formData,
-        date: selectedDate.toISOString().split('T')[0],
+      const payload = {
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        date: toDateStr(selectedDate),
         time: selectedTime,
-        topic: `${selectedService.name} | ${formData.topic}`
+        topic: `${selectedService.name} | ${formData.topic}`,
       };
-      const appointmentId = await bookAppointment(appointment);
-      
-      // Call the API to send the WhatsApp message
-      await fetch('/api/whatsapp', { method: 'POST', body: JSON.stringify({ ...appointment, id: appointmentId }) });
-      
+
+      const res = await fetch("/api/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Slot was taken between load and submit — refresh and let them re-pick.
+        if (res.status === 409) {
+          alert(data.error || "השעה הזו נתפסה. בחר/י שעה אחרת.");
+          setSelectedTime(null);
+          setStep("calendar");
+          const r = await fetch(`/api/availability?date=${payload.date}&duration=${selectedService.durationMinutes}`);
+          const dd = await r.json();
+          setAvailableTimes(Array.isArray(dd.slots) ? dd.slots : []);
+          return;
+        }
+        throw new Error(data.error || "Booking failed");
+      }
+
+      // Confirmation WhatsApp (best-effort; does not block success).
+      fetch("/api/whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, id: data.id }),
+      }).catch(() => {});
+
       setStep("success");
     } catch (error) {
       console.error(error);
@@ -98,7 +135,7 @@ export default function CalendarBooking() {
 
   if (step === "success") {
     const calendarLink = selectedDate && selectedTime ? getGoogleCalendarLink(
-      selectedDate.toISOString().split('T')[0],
+      toDateStr(selectedDate),
       selectedTime,
       "פגישה - מצפן הלב",
       `סוג: ${selectedService?.name}\nנושא: ${formData.topic}`

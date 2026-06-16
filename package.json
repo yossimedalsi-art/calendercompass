@@ -12,6 +12,7 @@
     "@hebcal/core": "^6.5.3",
     "date-fns": "^4.4.0",
     "firebase": "^12.14.0",
+    "firebase-admin": "^14.0.0",
     "ics": "^3.12.0",
     "lucide-react": "^1.18.0",
     "next": "16.2.9",
