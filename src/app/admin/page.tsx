@@ -3,11 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { collection, getDocs, query, orderBy, deleteDoc, doc, addDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { Loader2, Trash2, Plus, Calendar as CalendarIcon, User, LogOut, Users, BookOpen, X, Settings as SettingsIcon, Save } from "lucide-react";
-import { saveAppointmentNote, addClient } from "@/lib/appointments";
-import { getSettings, saveSettings, SystemSettings } from "@/lib/settings";
+import type { SystemSettings } from "@/lib/settings";
 
 type Tab = "calendar" | "clients" | "settings";
 
@@ -48,20 +45,12 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch Appointments
-      const qApts = query(collection(db, "appointments"), orderBy("date", "asc"), orderBy("time", "asc"));
-      const snapApts = await getDocs(qApts);
-      setAppointments(snapApts.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-      // Fetch Clients
-      const qClients = query(collection(db, "clients"), orderBy("createdAt", "desc"));
-      const snapClients = await getDocs(qClients);
-      setClients(snapClients.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      
-      // Fetch Settings
-      const sysSettings = await getSettings();
-      setSettings(sysSettings);
-      
+      const res = await fetch("/api/admin", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load admin data");
+      setAppointments(Array.isArray(data.appointments) ? data.appointments : []);
+      setClients(Array.isArray(data.clients) ? data.clients : []);
+      setSettings(data.settings);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -72,7 +61,11 @@ export default function AdminDashboard() {
   // --- Handlers ---
   const handleDeleteApt = async (id: string) => {
     if (confirm("האם אתה בטוח שברצונך למחוק פגישה/חסימה זו?")) {
-      await deleteDoc(doc(db, "appointments", id));
+      const res = await fetch(`/api/admin?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        alert("שגיאה במחיקת הפגישה");
+        return;
+      }
       fetchData();
     }
   };
@@ -80,14 +73,16 @@ export default function AdminDashboard() {
   const handleAddPrivateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEvent.date || !newEvent.time || !newEvent.title) return;
-    await addDoc(collection(db, "appointments"), {
-      date: newEvent.date,
-      time: newEvent.time,
-      name: "אירוע פרטי: " + newEvent.title,
-      topic: "חסום",
-      phone: "-",
-      isPrivate: true
+    const res = await fetch("/api/admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "private-event", ...newEvent }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "שגיאה בהוספת האירוע");
+      return;
+    }
     setShowAddEvent(false);
     setNewEvent({ date: "", time: "", title: "" });
     fetchData();
@@ -95,18 +90,35 @@ export default function AdminDashboard() {
 
   const handleSaveNote = async () => {
     if (!currentAppointment) return;
-    await saveAppointmentNote(currentAppointment.id, noteText);
+    const res = await fetch("/api/admin", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "note", id: currentAppointment.id, notes: noteText }),
+    });
+    if (!res.ok) {
+      alert("שגיאה בשמירת התקציר");
+      return;
+    }
     setShowNoteModal(false);
     fetchData();
   };
 
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    await addClient({
-      name: newClient.name,
-      phone: newClient.phone,
-      email: newClient.email
+    const res = await fetch("/api/admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "client",
+        name: newClient.name,
+        phone: newClient.phone,
+        email: newClient.email,
+      }),
     });
+    if (!res.ok) {
+      alert("שגיאה בהוספת לקוח");
+      return;
+    }
     setShowAddClient(false);
     setNewClient({ name: "", phone: "", email: "" });
     fetchData();
@@ -115,7 +127,12 @@ export default function AdminDashboard() {
   const handleSaveSettings = async () => {
     if (!settings) return;
     try {
-      await saveSettings(settings);
+      const res = await fetch("/api/admin", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "settings", settings }),
+      });
+      if (!res.ok) throw new Error("Failed to save settings");
       alert("ההגדרות נשמרו בהצלחה!");
     } catch (error) {
       alert("שגיאה בשמירת הגדרות");
