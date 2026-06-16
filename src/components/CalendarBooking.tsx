@@ -193,11 +193,11 @@ export default function CalendarBooking() {
             {Array.from({ length: startDay }).map((_, i) => <div key={`empty-${i}`} className="p-2" />)}
             {daysInMonth.map((date) => {
               const dayOfWeek = date.getDay();
-              const isClosed = settings && (!settings.schedule[dayOfWeek] || !settings.schedule[dayOfWeek].active);
+              const isClosed = settings ? (!settings.schedule[dayOfWeek] || !settings.schedule[dayOfWeek].active) : false;
               
               const isSelected = selectedDate && isSameDay(date, selectedDate);
               const isPast = date < new Date() && !isToday(date);
-              const disabled = isPast || isShabbatOrHoliday(date) || isClosed;
+              const disabled = Boolean(isPast || isShabbatOrHoliday(date) || isClosed);
 
               return (
                 <button
