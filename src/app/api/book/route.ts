@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       phone: String(body.phone).trim(),
       email: body.email ? String(body.email).trim() : "",
       topic: body.topic ? String(body.topic).trim() : "",
+      durationMinutes: body.durationMinutes,
     });
 
     return NextResponse.json({ id });

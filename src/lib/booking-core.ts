@@ -35,6 +35,34 @@ function parseDateString(dateStr: string) {
   return { noonUtc, dayOfWeek };
 }
 
+// Builds the set of all blocked minutes for a day: each appointment's own
+// duration, plus the buffer configured for whichever service has that
+// duration (falls back to 40min if no matching service is found). Shared by
+// getAvailableSlots (display) and bookAppointment (write-time enforcement)
+// so the two can never drift apart.
+const DEFAULT_BUFFER_MINUTES = 40;
+function buildBlockedMinutes(
+  appointments: { time?: string; durationMinutes?: number }[],
+  settings: SystemSettings
+): Set<number> {
+  const blockedMinutes = new Set<number>();
+  appointments.forEach((apt) => {
+    if (!apt.time) return;
+    const [h, m] = apt.time.split(':').map(Number);
+    const aptStartMin = h * 60 + m;
+    const aptDuration = apt.durationMinutes || 60;
+    const aptEndMin = aptStartMin + aptDuration;
+    const matchingService = settings.services.find((s) => s.durationMinutes === aptDuration);
+    const bufferMinutes = matchingService?.bufferMinutes ?? DEFAULT_BUFFER_MINUTES;
+    const blockedUntil = aptEndMin + bufferMinutes;
+
+    for (let min = aptStartMin; min < blockedUntil; min++) {
+      blockedMinutes.add(min);
+    }
+  });
+  return blockedMinutes;
+}
+
 export async function getAvailableSlots(
   dateStr: string,
   durationMinutes = 60
@@ -53,26 +81,10 @@ export async function getAvailableSlots(
     .where("date", "==", dateStr)
     .get();
 
-  // Build a set of all blocked minutes: each appointment's own duration, plus
-  // the buffer configured for whichever service has that duration (falls back
-  // to 40min if no matching service is found).
-  const DEFAULT_BUFFER_MINUTES = 40;
-  const blockedMinutes = new Set<number>();
-  snap.docs.forEach((doc) => {
-    const apt = doc.data() as { time?: string; durationMinutes?: number };
-    if (!apt.time) return;
-    const [h, m] = apt.time.split(':').map(Number);
-    const aptStartMin = h * 60 + m;
-    const aptDuration = apt.durationMinutes || 60;
-    const aptEndMin = aptStartMin + aptDuration;
-    const matchingService = settings.services.find((s) => s.durationMinutes === aptDuration);
-    const bufferMinutes = matchingService?.bufferMinutes ?? DEFAULT_BUFFER_MINUTES;
-    const blockedUntil = aptEndMin + bufferMinutes;
-
-    for (let min = aptStartMin; min < blockedUntil; min++) {
-      blockedMinutes.add(min);
-    }
-  });
+  const blockedMinutes = buildBlockedMinutes(
+    snap.docs.map((doc) => doc.data() as { time?: string; durationMinutes?: number }),
+    settings
+  );
 
   const [startHour, startMin] = daySchedule.start.split(":").map(Number);
   const [endHour, endMin] = daySchedule.end.split(":").map(Number);
@@ -118,12 +130,29 @@ export async function bookAppointment(data: BookingInput): Promise<string> {
   if (!date || !time || !data.name || !data.phone) {
     throw new Error("INVALID_INPUT");
   }
+  const durationMinutes = data.durationMinutes || 60;
+  const [h, m] = time.split(':').map(Number);
+  const startMin = h * 60 + m;
 
   const db = getAdminDb();
+  const settings = await getPublicSettings();
+
   return db.runTransaction(async (tx) => {
     const slotRef = db.collection("slots").doc(`${date}_${time}`);
+    const dayApptsSnap = await tx.get(db.collection("appointments").where("date", "==", date));
     const slotSnap = await tx.get(slotRef);
     if (slotSnap.exists) throw new Error("SLOT_TAKEN");
+
+    // Re-check the buffer against same-day appointments inside the
+    // transaction itself — relying on the client's last-loaded availability
+    // list isn't enough, since it can be stale by the time this write happens.
+    const blockedMinutes = buildBlockedMinutes(
+      dayApptsSnap.docs.map((doc) => doc.data() as { time?: string; durationMinutes?: number }),
+      settings
+    );
+    for (let min = startMin; min < startMin + durationMinutes; min++) {
+      if (blockedMinutes.has(min)) throw new Error("SLOT_TAKEN");
+    }
 
     const apptRef = db.collection("appointments").doc();
     tx.set(slotRef, { apptId: apptRef.id, date, time, createdAt: FieldValue.serverTimestamp() });
