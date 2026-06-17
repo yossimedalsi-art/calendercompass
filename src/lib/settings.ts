@@ -7,6 +7,7 @@ export interface Service {
   durationMinutes: number;
   price: number;
   bufferMinutes?: number;
+  originalPrice?: number; // set this higher than `price` to show a "promo" strikethrough price
 }
 
 export interface DaySchedule {

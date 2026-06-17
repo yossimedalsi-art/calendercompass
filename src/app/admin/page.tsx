@@ -484,6 +484,22 @@ export default function AdminDashboard() {
                               dir="ltr"
                             />
                           </div>
+                          <div className="w-36">
+                            <span className="text-xs text-primary/50 mb-1 block">מחיר מקורי (למבצע)</span>
+                            <input
+                              type="number"
+                              placeholder="ללא מבצע"
+                              value={service.originalPrice ?? ""}
+                              onChange={(e) => {
+                                const newSettings = {...settings};
+                                const val = e.target.value;
+                                newSettings.services[index].originalPrice = val === "" ? undefined : (parseInt(val) || 0);
+                                setSettings(newSettings);
+                              }}
+                              className="w-full p-2 rounded-lg border border-white outline-none"
+                              dir="ltr"
+                            />
+                          </div>
                           <div className="w-32">
                             <span className="text-xs text-primary/50 mb-1 block">מנוחה אחרי (דק')</span>
                             <input

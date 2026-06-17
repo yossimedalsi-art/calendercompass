@@ -187,7 +187,16 @@ export default function CalendarBooking() {
                   <h3 className="text-lg font-bold text-primary mb-1">{service.name}</h3>
                   <div className="flex items-center gap-4 text-sm text-primary/60">
                     <span className="flex items-center gap-1"><Clock className="w-4 h-4"/> {service.durationMinutes} דקות</span>
-                    {service.price > 0 && <span className="font-bold text-accent">{service.price} ₪</span>}
+                    {service.originalPrice && service.originalPrice > service.price ? (
+                      <span className="flex items-center gap-2">
+                        <span className="line-through text-primary/40">{service.originalPrice} ₪</span>
+                        <span className="font-bold text-accent">
+                          {service.price > 0 ? `${service.price} ₪` : "ללא עלות"}
+                        </span>
+                      </span>
+                    ) : (
+                      service.price > 0 && <span className="font-bold text-accent">{service.price} ₪</span>
+                    )}
                   </div>
                 </div>
                 <ChevronLeft className="w-6 h-6 text-primary/30 group-hover:text-accent transition-colors" />
