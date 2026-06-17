@@ -85,6 +85,7 @@ export default function CalendarBooking() {
         email: formData.email,
         date: toDateStr(selectedDate),
         time: selectedTime,
+        durationMinutes: selectedService.durationMinutes,
         topic: `${selectedService.name} | ${formData.topic}`,
       };
 

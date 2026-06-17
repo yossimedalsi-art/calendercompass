@@ -6,7 +6,7 @@ import type { SystemSettings } from "./settings";
 // Server-side mirror of the default settings (kept here so this module never
 // imports the client Firebase SDK).
 const DEFAULT_SETTINGS: SystemSettings = {
-  services: [{ id: "1", name: "פגישת ייעוץ אישית", durationMinutes: 60, price: 300 }],
+  services: [{ id: "1", name: "פגישת ייעוץ אישית", durationMinutes: 60, price: 300, bufferMinutes: 40 }],
   schedule: {
     0: { active: true, start: "09:00", end: "16:00" },
     1: { active: true, start: "09:00", end: "16:00" },
@@ -52,7 +52,24 @@ export async function getAvailableSlots(
     .collection("appointments")
     .where("date", "==", dateStr)
     .get();
-  const booked = new Set(snap.docs.map((doc) => (doc.data() as { time?: string }).time));
+
+  // Build a set of all blocked minutes (appointment duration + default 40min buffer).
+  // Note: we assume all existing appointments are 60min. For multi-service support,
+  // store durationMinutes in each appointment doc.
+  const BUFFER_MINUTES = 40;
+  const blockedMinutes = new Set<number>();
+  snap.docs.forEach((doc) => {
+    const apt = doc.data() as { time?: string };
+    if (!apt.time) return;
+    const [h, m] = apt.time.split(':').map(Number);
+    const aptStartMin = h * 60 + m;
+    const aptEndMin = aptStartMin + 60; // assume 60 min appointment
+    const blockedUntil = aptEndMin + BUFFER_MINUTES;
+
+    for (let min = aptStartMin; min < blockedUntil; min++) {
+      blockedMinutes.add(min);
+    }
+  });
 
   const [startHour, startMin] = daySchedule.start.split(":").map(Number);
   const [endHour, endMin] = daySchedule.end.split(":").map(Number);
@@ -64,7 +81,17 @@ export async function getAvailableSlots(
     const h = String(Math.floor(cur / 60)).padStart(2, "0");
     const mm = String(cur % 60).padStart(2, "0");
     const t = `${h}:${mm}`;
-    if (!booked.has(t)) slots.push(t);
+
+    // Check if this slot (duration + buffer) overlaps with any blocked minutes.
+    let isAvailable = true;
+    for (let min = cur; min < cur + durationMinutes; min++) {
+      if (blockedMinutes.has(min)) {
+        isAvailable = false;
+        break;
+      }
+    }
+
+    if (isAvailable) slots.push(t);
     cur += durationMinutes;
   }
   return slots;
@@ -77,6 +104,7 @@ export interface BookingInput {
   phone: string;
   email?: string;
   topic: string;
+  durationMinutes?: number;
 }
 
 // Atomic booking: a per-slot lock doc guarantees one booking per slot even
@@ -103,6 +131,7 @@ export async function bookAppointment(data: BookingInput): Promise<string> {
       topic: data.topic || "",
       date,
       time,
+      durationMinutes: data.durationMinutes || 60,
       isPrivate: false,
       createdAt: FieldValue.serverTimestamp(),
     });

@@ -6,6 +6,7 @@ export interface Service {
   name: string;
   durationMinutes: number;
   price: number;
+  bufferMinutes?: number;
 }
 
 export interface DaySchedule {
@@ -21,7 +22,7 @@ export interface SystemSettings {
 
 const DEFAULT_SETTINGS: SystemSettings = {
   services: [
-    { id: "1", name: "פגישת ייעוץ אישית", durationMinutes: 60, price: 300 }
+    { id: "1", name: "פגישת ייעוץ אישית", durationMinutes: 60, price: 300, bufferMinutes: 40 }
   ],
   schedule: {
     0: { active: true, start: "09:00", end: "16:00" },

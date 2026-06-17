@@ -472,12 +472,26 @@ export default function AdminDashboard() {
                           </div>
                           <div className="w-32">
                             <span className="text-xs text-primary/50 mb-1 block">מחיר (₪)</span>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               value={service.price}
                               onChange={(e) => {
                                 const newSettings = {...settings};
                                 newSettings.services[index].price = parseInt(e.target.value) || 0;
+                                setSettings(newSettings);
+                              }}
+                              className="w-full p-2 rounded-lg border border-white outline-none"
+                              dir="ltr"
+                            />
+                          </div>
+                          <div className="w-32">
+                            <span className="text-xs text-primary/50 mb-1 block">מנוחה אחרי (דק')</span>
+                            <input
+                              type="number"
+                              value={service.bufferMinutes || 0}
+                              onChange={(e) => {
+                                const newSettings = {...settings};
+                                newSettings.services[index].bufferMinutes = parseInt(e.target.value) || 0;
                                 setSettings(newSettings);
                               }}
                               className="w-full p-2 rounded-lg border border-white outline-none"
