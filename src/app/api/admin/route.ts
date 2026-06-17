@@ -11,14 +11,24 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const db = getAdminDb();
+    // NOTE: we sort in memory rather than with orderBy("date").orderBy("time"),
+    // because ordering by two fields would require a composite Firestore index
+    // that may not exist — and a missing index makes the whole query throw,
+    // which is exactly what would leave the dashboard empty.
     const [apptSnap, clientSnap, settings] = await Promise.all([
-      db.collection("appointments").orderBy("date").orderBy("time").get(),
-      db.collection("clients").orderBy("name").get(),
+      db.collection("appointments").get(),
+      db.collection("clients").get(),
       getPublicSettings(),
     ]);
 
-    const appointments = apptSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    const clients = clientSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const appointments = apptSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown>))
+      .sort((a, b) =>
+        `${a.date ?? ""} ${a.time ?? ""}`.localeCompare(`${b.date ?? ""} ${b.time ?? ""}`)
+      );
+    const clients = clientSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown>))
+      .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
 
     return NextResponse.json({ appointments, clients, settings });
   } catch (error) {
