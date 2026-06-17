@@ -57,32 +57,57 @@ function isWithinMinLeadTime(y: number, m: number, d: number, slotStartMin: numb
   return slotAsFakeUtcMs - israelNowAsFakeUtcMs() < MIN_LEAD_HOURS * 60 * 60 * 1000;
 }
 
-// Builds the set of all blocked minutes for a day: each appointment's own
-// duration, plus the buffer configured for whichever service has that
-// duration (falls back to 40min if no matching service is found). Shared by
-// getAvailableSlots (display) and bookAppointment (write-time enforcement)
-// so the two can never drift apart.
 const DEFAULT_BUFFER_MINUTES = 40;
+function bufferForDuration(durationMinutes: number, settings: SystemSettings): number {
+  const matchingService = settings.services.find((s) => s.durationMinutes === durationMinutes);
+  return matchingService?.bufferMinutes ?? DEFAULT_BUFFER_MINUTES;
+}
+
+// Builds two views of a day's appointments:
+// - occupiedMinutes: each appointment's actual [start, end) — no buffer.
+// - blockedMinutes: [start, end + buffer) — the appointment's own time plus
+//   the rest period required after it, for whichever service matches its duration.
+// Shared by getAvailableSlots (display) and bookAppointment (write-time
+// enforcement) so the two can never drift apart.
 function buildBlockedMinutes(
   appointments: { time?: string; durationMinutes?: number }[],
   settings: SystemSettings
-): Set<number> {
+): { blockedMinutes: Set<number>; occupiedMinutes: Set<number> } {
   const blockedMinutes = new Set<number>();
+  const occupiedMinutes = new Set<number>();
   appointments.forEach((apt) => {
     if (!apt.time) return;
     const [h, m] = apt.time.split(':').map(Number);
     const aptStartMin = h * 60 + m;
     const aptDuration = apt.durationMinutes || 60;
     const aptEndMin = aptStartMin + aptDuration;
-    const matchingService = settings.services.find((s) => s.durationMinutes === aptDuration);
-    const bufferMinutes = matchingService?.bufferMinutes ?? DEFAULT_BUFFER_MINUTES;
-    const blockedUntil = aptEndMin + bufferMinutes;
+    const blockedUntil = aptEndMin + bufferForDuration(aptDuration, settings);
 
-    for (let min = aptStartMin; min < blockedUntil; min++) {
-      blockedMinutes.add(min);
-    }
+    for (let min = aptStartMin; min < aptEndMin; min++) occupiedMinutes.add(min);
+    for (let min = aptStartMin; min < blockedUntil; min++) blockedMinutes.add(min);
   });
-  return blockedMinutes;
+  return { blockedMinutes, occupiedMinutes };
+}
+
+// A candidate slot is available only if: (a) it doesn't fall within an
+// existing appointment's own time-plus-buffer, AND (b) its own
+// time-plus-buffer doesn't run into the start of an existing appointment
+// that comes right after it. Without (b), a new booking placed just before
+// an existing one would leave no rest gap at all.
+function isSlotFree(
+  startMin: number,
+  durationMinutes: number,
+  candidateBuffer: number,
+  blockedMinutes: Set<number>,
+  occupiedMinutes: Set<number>
+): boolean {
+  for (let min = startMin; min < startMin + durationMinutes; min++) {
+    if (blockedMinutes.has(min)) return false;
+  }
+  for (let min = startMin + durationMinutes; min < startMin + durationMinutes + candidateBuffer; min++) {
+    if (occupiedMinutes.has(min)) return false;
+  }
+  return true;
 }
 
 export async function getAvailableSlots(
@@ -103,10 +128,11 @@ export async function getAvailableSlots(
     .where("date", "==", dateStr)
     .get();
 
-  const blockedMinutes = buildBlockedMinutes(
+  const { blockedMinutes, occupiedMinutes } = buildBlockedMinutes(
     snap.docs.map((doc) => doc.data() as { time?: string; durationMinutes?: number }),
     settings
   );
+  const candidateBuffer = bufferForDuration(durationMinutes, settings);
 
   const [startHour, startMin] = daySchedule.start.split(":").map(Number);
   const [endHour, endMin] = daySchedule.end.split(":").map(Number);
@@ -119,17 +145,9 @@ export async function getAvailableSlots(
     const mm = String(cur % 60).padStart(2, "0");
     const t = `${h}:${mm}`;
 
-    // Check if this slot (duration + buffer) overlaps with any blocked minutes,
-    // and that it's far enough in the future to satisfy the minimum lead time.
-    let isAvailable = !isWithinMinLeadTime(y, month, d, cur);
-    if (isAvailable) {
-      for (let min = cur; min < cur + durationMinutes; min++) {
-        if (blockedMinutes.has(min)) {
-          isAvailable = false;
-          break;
-        }
-      }
-    }
+    const isAvailable =
+      !isWithinMinLeadTime(y, month, d, cur) &&
+      isSlotFree(cur, durationMinutes, candidateBuffer, blockedMinutes, occupiedMinutes);
 
     if (isAvailable) slots.push(t);
     cur += durationMinutes;
@@ -173,12 +191,13 @@ export async function bookAppointment(data: BookingInput): Promise<string> {
     // Re-check the buffer against same-day appointments inside the
     // transaction itself — relying on the client's last-loaded availability
     // list isn't enough, since it can be stale by the time this write happens.
-    const blockedMinutes = buildBlockedMinutes(
+    const { blockedMinutes, occupiedMinutes } = buildBlockedMinutes(
       dayApptsSnap.docs.map((doc) => doc.data() as { time?: string; durationMinutes?: number }),
       settings
     );
-    for (let min = startMin; min < startMin + durationMinutes; min++) {
-      if (blockedMinutes.has(min)) throw new Error("SLOT_TAKEN");
+    const candidateBuffer = bufferForDuration(durationMinutes, settings);
+    if (!isSlotFree(startMin, durationMinutes, candidateBuffer, blockedMinutes, occupiedMinutes)) {
+      throw new Error("SLOT_TAKEN");
     }
 
     const apptRef = db.collection("appointments").doc();
