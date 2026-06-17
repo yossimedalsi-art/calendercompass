@@ -1,4 +1,5 @@
-import { Compass, Phone, Mail, MapPin } from "lucide-react";
+import Image from "next/image";
+import { Phone, Mail, MapPin } from "lucide-react";
 import CalendarBooking from "@/components/CalendarBooking";
 import { getPublicSettings } from "@/lib/booking-core";
 
@@ -13,9 +14,7 @@ export default async function Home() {
     <div className="flex flex-col flex-1 items-center bg-background font-sans min-h-screen py-10 px-4 md:px-0">
       <header className="mb-8 flex flex-col items-center">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-12 h-12 bg-primary text-accent rounded-full flex items-center justify-center">
-            <Compass className="w-7 h-7" />
-          </div>
+          <Image src="/logo.webp" alt="מצפן הלב" width={48} height={48} className="rounded-full" />
           <span className="text-2xl font-display font-black text-primary">מצפן הלב</span>
         </div>
         <h1 className="text-3xl md:text-4xl font-display font-black text-primary mb-2">

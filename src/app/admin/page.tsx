@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { Loader2, Trash2, Plus, Calendar as CalendarIcon, User, LogOut, Users, BookOpen, X, Settings as SettingsIcon, Save, ArrowUp, ArrowDown, Compass } from "lucide-react";
+import { Loader2, Trash2, Plus, Calendar as CalendarIcon, User, LogOut, Users, BookOpen, X, Settings as SettingsIcon, Save, ArrowUp, ArrowDown } from "lucide-react";
 import type { SystemSettings } from "@/lib/settings";
 
 type Tab = "calendar" | "clients" | "settings";
@@ -174,7 +175,7 @@ export default function AdminDashboard() {
       <div className="w-full md:w-64 bg-primary text-white p-6 flex flex-col shrink-0">
         <div className="mb-8 mt-4 flex flex-col items-center md:items-end text-center md:text-right">
           <div className="flex items-center gap-2 mb-1">
-            <Compass className="w-7 h-7 text-accent" />
+            <Image src="/logo.webp" alt="מצפן הלב" width={32} height={32} className="rounded-full" />
             <h1 className="text-2xl font-bold font-display text-accent">מצפן הלב</h1>
           </div>
           <p className="text-white/60 text-sm">מערכת ניהול V2</p>
