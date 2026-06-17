@@ -438,7 +438,12 @@ export default function AdminDashboard() {
                         <Plus className="w-4 h-4" /> הוסף שירות
                       </button>
                     </div>
-                    <p className="text-sm text-primary/60 mb-6">אלו האפשרויות שהלקוח יראה לפני קביעת השעה. משך הזמן יקבע אוטומטית כמה זמן ייחסם ביומן.</p>
+                    <p className="text-sm text-primary/60 mb-6">
+                      אלו האפשרויות שהלקוח יראה לפני קביעת השעה. משך הזמן יקבע אוטומטית כמה זמן ייחסם ביומן.
+                      <br />
+                      להרצת מבצע (למשל &quot;99 ₪ ← ללא עלות&quot;): שדה &quot;מחיר לתשלום&quot; הוא הסכום שהלקוח ישלם בפועל,
+                      ושדה &quot;מחיר רגיל לפני מבצע&quot; הוא הסכום הישן שיוצג עם קו חוצה. כדי לבטל מבצע, רוקנו את שדה המחיר הרגיל.
+                    </p>
 
                     <div className="grid gap-4">
                       {settings.services.map((service, index) => (
@@ -471,7 +476,7 @@ export default function AdminDashboard() {
                             />
                           </div>
                           <div className="w-32">
-                            <span className="text-xs text-primary/50 mb-1 block">מחיר (₪)</span>
+                            <span className="text-xs text-primary/50 mb-1 block">מחיר לתשלום (₪)</span>
                             <input
                               type="number"
                               value={service.price}
@@ -484,11 +489,11 @@ export default function AdminDashboard() {
                               dir="ltr"
                             />
                           </div>
-                          <div className="w-36">
-                            <span className="text-xs text-primary/50 mb-1 block">מחיר מקורי (למבצע)</span>
+                          <div className="w-40">
+                            <span className="text-xs text-primary/50 mb-1 block">מחיר רגיל לפני מבצע (קו חוצה)</span>
                             <input
                               type="number"
-                              placeholder="ללא מבצע"
+                              placeholder="השאר ריק = אין מבצע"
                               value={service.originalPrice ?? ""}
                               onChange={(e) => {
                                 const newSettings = {...settings};
