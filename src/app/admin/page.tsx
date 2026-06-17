@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
-import { Loader2, Trash2, Plus, Calendar as CalendarIcon, User, LogOut, Users, BookOpen, X, Settings as SettingsIcon, Save } from "lucide-react";
+import { Loader2, Trash2, Plus, Calendar as CalendarIcon, User, LogOut, Users, BookOpen, X, Settings as SettingsIcon, Save, ArrowUp, ArrowDown, Compass } from "lucide-react";
 import type { SystemSettings } from "@/lib/settings";
 
 type Tab = "calendar" | "clients" | "settings";
@@ -172,8 +172,11 @@ export default function AdminDashboard() {
       
       {/* Sidebar */}
       <div className="w-full md:w-64 bg-primary text-white p-6 flex flex-col shrink-0">
-        <div className="mb-8 mt-4 text-center md:text-right">
-          <h1 className="text-2xl font-bold font-display text-accent">מצפן הלב</h1>
+        <div className="mb-8 mt-4 flex flex-col items-center md:items-end text-center md:text-right">
+          <div className="flex items-center gap-2 mb-1">
+            <Compass className="w-7 h-7 text-accent" />
+            <h1 className="text-2xl font-bold font-display text-accent">מצפן הלב</h1>
+          </div>
           <p className="text-white/60 text-sm">מערכת ניהול V2</p>
         </div>
 
@@ -443,11 +446,45 @@ export default function AdminDashboard() {
                       <br />
                       להרצת מבצע (למשל &quot;99 ₪ ← ללא עלות&quot;): שדה &quot;מחיר לתשלום&quot; הוא הסכום שהלקוח ישלם בפועל,
                       ושדה &quot;מחיר רגיל לפני מבצע&quot; הוא הסכום הישן שיוצג עם קו חוצה. כדי לבטל מבצע, רוקנו את שדה המחיר הרגיל.
+                      <br />
+                      ניתן לשנות את סדר הופעת השירותים בעמוד ההזמנה באמצעות החצים שמשמאל לכל שורה.
                     </p>
 
                     <div className="grid gap-4">
                       {settings.services.map((service, index) => (
                         <div key={service.id} className="flex flex-wrap items-center gap-4 bg-primary/5 p-4 rounded-xl border border-primary/10">
+                          <div className="flex flex-col gap-1 mt-6">
+                            <button
+                              onClick={() => {
+                                if (index === 0) return;
+                                const newSettings = {...settings};
+                                const arr = [...newSettings.services];
+                                [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]];
+                                newSettings.services = arr;
+                                setSettings(newSettings);
+                              }}
+                              disabled={index === 0}
+                              className="p-1 text-primary/50 hover:bg-primary/10 rounded disabled:opacity-20 disabled:hover:bg-transparent"
+                              title="הזז למעלה"
+                            >
+                              <ArrowUp className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (index === settings.services.length - 1) return;
+                                const newSettings = {...settings};
+                                const arr = [...newSettings.services];
+                                [arr[index + 1], arr[index]] = [arr[index], arr[index + 1]];
+                                newSettings.services = arr;
+                                setSettings(newSettings);
+                              }}
+                              disabled={index === settings.services.length - 1}
+                              className="p-1 text-primary/50 hover:bg-primary/10 rounded disabled:opacity-20 disabled:hover:bg-transparent"
+                              title="הזז למטה"
+                            >
+                              <ArrowDown className="w-4 h-4" />
+                            </button>
+                          </div>
                           <div className="flex-1 min-w-[200px]">
                             <span className="text-xs text-primary/50 mb-1 block">שם השירות</span>
                             <input 
@@ -536,6 +573,52 @@ export default function AdminDashboard() {
                           </button>
                         </div>
                       ))}
+                    </div>
+                  </section>
+
+                  {/* Contact Info */}
+                  <section>
+                    <h3 className="text-xl font-bold text-primary mb-4 border-b border-gray-100 pb-2">פרטי התקשרות</h3>
+                    <p className="text-sm text-primary/60 mb-6">פרטים אלו יוצגו לציבור בעמוד קביעת הפגישה.</p>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <span className="text-xs text-primary/50 mb-1 block">טלפון</span>
+                        <input
+                          type="tel"
+                          value={settings.contact?.phone || ""}
+                          onChange={(e) => {
+                            const newSettings = {...settings, contact: {...settings.contact, phone: e.target.value}};
+                            setSettings(newSettings);
+                          }}
+                          className="w-full p-2 rounded-lg border border-gray-200 outline-none"
+                          dir="ltr"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-xs text-primary/50 mb-1 block">אימייל</span>
+                        <input
+                          type="email"
+                          value={settings.contact?.email || ""}
+                          onChange={(e) => {
+                            const newSettings = {...settings, contact: {...settings.contact, email: e.target.value}};
+                            setSettings(newSettings);
+                          }}
+                          className="w-full p-2 rounded-lg border border-gray-200 outline-none"
+                          dir="ltr"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-xs text-primary/50 mb-1 block">כתובת</span>
+                        <input
+                          type="text"
+                          value={settings.contact?.address || ""}
+                          onChange={(e) => {
+                            const newSettings = {...settings, contact: {...settings.contact, address: e.target.value}};
+                            setSettings(newSettings);
+                          }}
+                          className="w-full p-2 rounded-lg border border-gray-200 outline-none"
+                        />
+                      </div>
                     </div>
                   </section>
 

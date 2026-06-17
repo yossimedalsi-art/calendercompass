@@ -16,9 +16,16 @@ export interface DaySchedule {
   end: string;   // HH:mm
 }
 
+export interface ContactInfo {
+  phone?: string;
+  email?: string;
+  address?: string;
+}
+
 export interface SystemSettings {
   services: Service[];
   schedule: Record<number, DaySchedule>; // 0 = Sunday, 1 = Monday, etc.
+  contact?: ContactInfo;
 }
 
 const DEFAULT_SETTINGS: SystemSettings = {
