@@ -31,6 +31,12 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
+    if (message === "TOO_SOON") {
+      return NextResponse.json(
+        { error: "יש לקבוע פגישה לפחות 36 שעות מראש. בחר/י שעה מאוחרת יותר." },
+        { status: 409 }
+      );
+    }
     console.error("POST /api/book error:", error);
     return NextResponse.json({ error: "אירעה שגיאה בקביעת הפגישה" }, { status: 500 });
   }

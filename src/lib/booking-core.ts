@@ -32,7 +32,29 @@ function parseDateString(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
   const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return { noonUtc, dayOfWeek };
+  return { y, m, d, noonUtc, dayOfWeek };
+}
+
+// Clients must book at least this many hours ahead of the appointment.
+const MIN_LEAD_HOURS = 36;
+
+// Both sides of the lead-time check are expressed as a "fake UTC" timestamp
+// built from Israel wall-clock components, so the comparison is correct
+// regardless of the server's own timezone or DST — no real timezone math
+// needed since both sides use the same (fake) representation.
+function israelNowAsFakeUtcMs(): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+}
+
+function isWithinMinLeadTime(y: number, m: number, d: number, slotStartMin: number): boolean {
+  const slotAsFakeUtcMs = Date.UTC(y, m - 1, d, Math.floor(slotStartMin / 60), slotStartMin % 60);
+  return slotAsFakeUtcMs - israelNowAsFakeUtcMs() < MIN_LEAD_HOURS * 60 * 60 * 1000;
 }
 
 // Builds the set of all blocked minutes for a day: each appointment's own
@@ -69,7 +91,7 @@ export async function getAvailableSlots(
 ): Promise<string[]> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return [];
 
-  const { noonUtc, dayOfWeek } = parseDateString(dateStr);
+  const { y, m: month, d, noonUtc, dayOfWeek } = parseDateString(dateStr);
   if (isShabbatOrHoliday(noonUtc)) return [];
 
   const settings = await getPublicSettings();
@@ -97,12 +119,15 @@ export async function getAvailableSlots(
     const mm = String(cur % 60).padStart(2, "0");
     const t = `${h}:${mm}`;
 
-    // Check if this slot (duration + buffer) overlaps with any blocked minutes.
-    let isAvailable = true;
-    for (let min = cur; min < cur + durationMinutes; min++) {
-      if (blockedMinutes.has(min)) {
-        isAvailable = false;
-        break;
+    // Check if this slot (duration + buffer) overlaps with any blocked minutes,
+    // and that it's far enough in the future to satisfy the minimum lead time.
+    let isAvailable = !isWithinMinLeadTime(y, month, d, cur);
+    if (isAvailable) {
+      for (let min = cur; min < cur + durationMinutes; min++) {
+        if (blockedMinutes.has(min)) {
+          isAvailable = false;
+          break;
+        }
       }
     }
 
@@ -133,6 +158,8 @@ export async function bookAppointment(data: BookingInput): Promise<string> {
   const durationMinutes = data.durationMinutes || 60;
   const [h, m] = time.split(':').map(Number);
   const startMin = h * 60 + m;
+  const { y, m: month, d } = parseDateString(date);
+  if (isWithinMinLeadTime(y, month, d, startMin)) throw new Error("TOO_SOON");
 
   const db = getAdminDb();
   const settings = await getPublicSettings();
