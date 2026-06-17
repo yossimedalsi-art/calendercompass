@@ -51,6 +51,35 @@ export async function POST(request: Request) {
       throw new Error("Failed to send WhatsApp message");
     }
 
+    // Notify the business owner too, so new bookings don't go unnoticed.
+    const ownerPhone = process.env.OWNER_WHATSAPP_PHONE;
+    if (ownerPhone) {
+      const ownerMessageText = `התקבלה פגישה חדשה!\n\nלקוח/ה: ${name}\nטלפון: ${phone}\nתאריך: ${date} בשעה ${time}\nנושא: ${topic}`;
+      try {
+        await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: ownerPhone.replace(/\D/g, ''),
+            type: "text",
+            text: {
+              preview_url: false,
+              body: ownerMessageText
+            }
+          })
+        });
+      } catch (err) {
+        console.error("Failed to notify owner of new booking:", err);
+      }
+    } else {
+      console.warn("OWNER_WHATSAPP_PHONE is missing. Owner was not notified of the new booking.");
+    }
+
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error("Error in WhatsApp API route:", error);

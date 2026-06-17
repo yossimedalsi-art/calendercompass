@@ -1,15 +1,22 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { doc, getDoc, deleteDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import Link from "next/link";
 
-export default function CancelAppointmentPage({ params }: { params: { id: string } }) {
-  const [appointment, setAppointment] = useState<any>(null);
+interface AppointmentView {
+  id: string;
+  name: string;
+  date: string;
+  time: string;
+  topic: string;
+}
+
+export default function CancelAppointmentPage({ params }: { params: Promise<{ id: string }> }) {
+  const [id, setId] = useState<string | null>(null);
+  const [appointment, setAppointment] = useState<AppointmentView | null>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
   const [canceled, setCanceled] = useState(false);
@@ -18,14 +25,15 @@ export default function CancelAppointmentPage({ params }: { params: { id: string
   useEffect(() => {
     const fetchAppointment = async () => {
       try {
-        const docRef = doc(db, "appointments", params.id);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          setAppointment({ id: docSnap.id, ...docSnap.data() });
-        } else {
+        const { id: appointmentId } = await params;
+        setId(appointmentId);
+        const res = await fetch(`/api/cancel/${appointmentId}`);
+        if (!res.ok) {
           setError("הפגישה לא נמצאה. ייתכן שהיא כבר בוטלה.");
+          return;
         }
+        const data = await res.json();
+        setAppointment(data);
       } catch (err) {
         setError("אירעה שגיאה בטעינת הנתונים.");
       } finally {
@@ -34,12 +42,14 @@ export default function CancelAppointmentPage({ params }: { params: { id: string
     };
 
     fetchAppointment();
-  }, [params.id]);
+  }, [params]);
 
   const handleCancel = async () => {
+    if (!id) return;
     setCanceling(true);
     try {
-      await deleteDoc(doc(db, "appointments", params.id));
+      const res = await fetch(`/api/cancel/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to cancel");
       setCanceled(true);
     } catch (err) {
       alert("שגיאה בביטול הפגישה. אנא צור קשר.");
@@ -86,11 +96,13 @@ export default function CancelAppointmentPage({ params }: { params: { id: string
     );
   }
 
+  if (!appointment) return null;
+
   return (
     <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4">
       <div className="bg-white p-8 rounded-3xl shadow-lg border border-primary/10 text-center max-w-md w-full">
         <h1 className="text-2xl font-bold text-primary font-display mb-6">ביטול פגישה</h1>
-        
+
         <div className="bg-red-50 p-6 rounded-2xl mb-8 border border-red-100">
           <p className="font-bold text-primary mb-1">שלום {appointment.name},</p>
           <p className="text-sm text-primary/70 mb-4">האם אתה בטוח שברצונך לבטל את הפגישה הבאה?</p>
