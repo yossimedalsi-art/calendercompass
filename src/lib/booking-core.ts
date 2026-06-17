@@ -53,18 +53,21 @@ export async function getAvailableSlots(
     .where("date", "==", dateStr)
     .get();
 
-  // Build a set of all blocked minutes (appointment duration + default 40min buffer).
-  // Note: we assume all existing appointments are 60min. For multi-service support,
-  // store durationMinutes in each appointment doc.
-  const BUFFER_MINUTES = 40;
+  // Build a set of all blocked minutes: each appointment's own duration, plus
+  // the buffer configured for whichever service has that duration (falls back
+  // to 40min if no matching service is found).
+  const DEFAULT_BUFFER_MINUTES = 40;
   const blockedMinutes = new Set<number>();
   snap.docs.forEach((doc) => {
-    const apt = doc.data() as { time?: string };
+    const apt = doc.data() as { time?: string; durationMinutes?: number };
     if (!apt.time) return;
     const [h, m] = apt.time.split(':').map(Number);
     const aptStartMin = h * 60 + m;
-    const aptEndMin = aptStartMin + 60; // assume 60 min appointment
-    const blockedUntil = aptEndMin + BUFFER_MINUTES;
+    const aptDuration = apt.durationMinutes || 60;
+    const aptEndMin = aptStartMin + aptDuration;
+    const matchingService = settings.services.find((s) => s.durationMinutes === aptDuration);
+    const bufferMinutes = matchingService?.bufferMinutes ?? DEFAULT_BUFFER_MINUTES;
+    const blockedUntil = aptEndMin + bufferMinutes;
 
     for (let min = aptStartMin; min < blockedUntil; min++) {
       blockedMinutes.add(min);
