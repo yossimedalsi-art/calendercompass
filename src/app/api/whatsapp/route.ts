@@ -8,9 +8,11 @@ export async function POST(request: Request) {
     const token = process.env.WHATSAPP_TOKEN;
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
     
-    // For local dev use localhost, for production use window.location.origin but since we are on server, we can hardcode the domain or pass it from client.
-    // We will hardcode heartcompass.vercel.app for now, or use localhost if not in production.
-    const baseUrl = process.env.NODE_ENV === "production" ? "https://heartcompass.vercel.app" : "http://localhost:3000";
+    // Derive the base URL from the incoming request's own host header, so the
+    // cancel link always matches whatever domain Vercel actually served this
+    // request on (avoids hardcoding a domain that may change or be wrong).
+    const requestUrl = new URL(request.url);
+    const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`;
     const cancelUrl = `${baseUrl}/cancel/${id}`;
 
     if (!token || !phoneNumberId) {
