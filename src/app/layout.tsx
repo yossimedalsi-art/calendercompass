@@ -13,8 +13,14 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://calendercompass.vercel.app"),
   title: "יומן פגישות - מצפן הלב",
   description: "קביעת פגישה או שיחת ייעוץ אישית",
+  openGraph: {
+    title: "יומן פגישות - מצפן הלב",
+    description: "קביעת פגישה או שיחת ייעוץ אישית",
+    locale: "he_IL",
+  },
 };
 
 export default function RootLayout({
