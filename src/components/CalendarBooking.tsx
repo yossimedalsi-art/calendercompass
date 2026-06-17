@@ -273,18 +273,29 @@ export default function CalendarBooking() {
             ) : availableTimes.length === 0 ? (
               <div className="text-center text-primary/60 py-8">אין שעות פנויות ביום זה.</div>
             ) : (
-              availableTimes.map((time) => (
-                <button
-                  key={time}
-                  onClick={() => setSelectedTime(time)}
-                  className={`
-                    py-3 px-4 rounded-xl text-center font-medium transition-all border
-                    ${selectedTime === time ? 'bg-accent border-accent text-white shadow-md' : 'bg-white border-primary/10 text-primary hover:border-accent hover:text-accent'}
-                  `}
-                >
-                  {time}
-                </button>
-              ))
+              availableTimes.map((time) => {
+                const isTimePast = selectedDate && isToday(selectedDate) ? (() => {
+                  const [h, m] = time.split(':').map(Number);
+                  const slotTime = new Date();
+                  slotTime.setHours(h, m, 0, 0);
+                  return slotTime < new Date();
+                })() : false;
+
+                return (
+                  <button
+                    key={time}
+                    onClick={() => setSelectedTime(time)}
+                    disabled={isTimePast}
+                    className={`
+                      py-3 px-4 rounded-xl text-center font-medium transition-all border
+                      ${isTimePast ? 'opacity-40 cursor-not-allowed text-primary/40 bg-gray-100 border-gray-200' : ''}
+                      ${selectedTime === time && !isTimePast ? 'bg-accent border-accent text-white shadow-md' : !isTimePast ? 'bg-white border-primary/10 text-primary hover:border-accent hover:text-accent' : ''}
+                    `}
+                  >
+                    {time}
+                  </button>
+                );
+              })
             )}
           </div>
 
